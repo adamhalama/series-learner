@@ -402,14 +402,14 @@ export default function HomePage() {
         </header>
 
         <section className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-12">
-            <div className="lg:col-span-12">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="min-w-0 lg:col-span-12">
               <BalanceCommandDeck summary={effectiveSummary} />
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-12">
-            <div className="lg:col-span-7">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="min-w-0 lg:col-span-7">
               <TitleBoard
                 titles={titles}
                 languages={languages}
@@ -463,7 +463,7 @@ export default function HomePage() {
               />
             </div>
 
-            <div className="space-y-4 lg:col-span-5">
+            <div className="min-w-0 space-y-4 lg:col-span-5">
               <LanguageRuntimeChart totals={effectiveSummary.totalsByLanguage} />
               <RecentActivityTimeline
                 logs={recentLogs}
@@ -483,8 +483,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-12">
-            <div className="lg:col-span-7">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="min-w-0 lg:col-span-7">
               <LanguageTotalsGrid
                 totals={effectiveSummary.totalsByLanguage}
                 learningLanguageCode={effectiveSummary.learningLanguageCode}
@@ -492,8 +492,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-12">
-            <div className="space-y-4 lg:col-span-7">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="min-w-0 space-y-4 lg:col-span-7">
               <LearningLanguageSwitcher
                 learningLanguageCode={effectiveSummary.learningLanguageCode}
                 languages={languages}
