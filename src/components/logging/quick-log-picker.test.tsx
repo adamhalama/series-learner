@@ -53,4 +53,18 @@ describe("QuickLogPicker", () => {
       expect(onQuickLog).toHaveBeenCalledWith(sampleTitles[0]);
     });
   });
+
+  it("disables rows that do not have minutes configured", () => {
+    render(
+      <QuickLogPicker
+        open
+        onOpenChange={() => undefined}
+        titles={sampleTitles}
+        languages={[{ code: "da", label: "Danish" }]}
+        onQuickLog={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /Borgen/i })).toBeDisabled();
+  });
 });

@@ -188,7 +188,6 @@ export default function HomePage() {
             <TitleBoard
               titles={titles}
               languages={languages}
-              onAddTitle={() => setIsAddDialogOpen(true)}
               loggingTitleId={inlineLoggingTitleId}
               onQuickLog={async (title, unitMinutes) => {
                 try {
@@ -203,6 +202,20 @@ export default function HomePage() {
                   toast.error(`Could not log session: ${(error as Error).message}`);
                 } finally {
                   setInlineLoggingTitleId(undefined);
+                }
+              }}
+              onCreateTitle={async ({ name, contentType, languageCode, languageLabel }) => {
+                try {
+                  await createTitle({
+                    name,
+                    contentType,
+                    languageCode,
+                    languageLabel,
+                  });
+                  toast.success(`Added ${name}.`);
+                } catch (error) {
+                  toast.error(`Could not add title: ${(error as Error).message}`);
+                  throw error;
                 }
               }}
               deletingTitleId={deletingTitleId}
@@ -251,20 +264,19 @@ export default function HomePage() {
         loggingTitleId={quickLoggingTitleId}
         onQuickLog={async (title) => {
           try {
+            if (title.defaultUnitMinutes === null) {
+              toast.error(`Set minutes for ${title.name} in Title Board first.`);
+              return;
+            }
+
             setQuickLoggingTitleId(title._id);
-            const unitMinutes = title.defaultUnitMinutes ?? 30;
             await addWatchLog({
               titleId: title._id,
               units: 1,
-              unitMinutes,
+              unitMinutes: title.defaultUnitMinutes,
             });
             setIsQuickLogPickerOpen(false);
-
-            if (title.defaultUnitMinutes === null) {
-              toast.success(`Quick logged ${title.name} using 30m default.`);
-            } else {
-              toast.success(`Quick logged 1 episode of ${title.name}.`);
-            }
+            toast.success(`Quick logged 1 episode of ${title.name}.`);
           } catch (error) {
             toast.error(`Could not quick log: ${(error as Error).message}`);
           } finally {

@@ -63,7 +63,8 @@ export const QuickLogPicker = ({
                 {titles.map((title) => {
                   const languageLabel =
                     languageMap.get(title.languageCode) ?? title.languageCode.toUpperCase();
-                  const effectiveMinutes = title.defaultUnitMinutes ?? 30;
+                  const canQuickLog = title.defaultUnitMinutes !== null;
+                  const effectiveMinutes = title.defaultUnitMinutes;
                   const isLoading = loggingTitleId === title._id;
 
                   return (
@@ -72,26 +73,29 @@ export const QuickLogPicker = ({
                       type="button"
                       className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--color-panel-border)] bg-[var(--color-surface-soft)] p-3 text-left transition hover:border-[var(--color-signal)]/50 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => void onQuickLog(title)}
-                      disabled={Boolean(loggingTitleId)}
+                      disabled={Boolean(loggingTitleId) || !canQuickLog}
                     >
                       <div className="min-w-0">
                         <p className="truncate font-medium text-[var(--color-text-primary)]">
                           {title.name}
                         </p>
                         <p className="text-xs uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
-                          {languageLabel} • {effectiveMinutes}m/episode
+                          {languageLabel} •{" "}
+                          {effectiveMinutes === null
+                            ? "set minutes in title board"
+                            : `${effectiveMinutes}m/episode`}
                         </p>
                       </div>
-                      {title.defaultUnitMinutes === null ? (
+                      {!canQuickLog ? (
                         <Badge
                           variant="outline"
                           className="border-[var(--color-non-learning)]/50 text-[var(--color-non-learning)]"
                         >
-                          uses 30m
+                          set time first
                         </Badge>
                       ) : null}
                       <div className="shrink-0 rounded-lg border border-[var(--color-panel-border)] bg-[var(--color-surface)] px-2 py-1 text-xs font-mono text-[var(--color-text-muted)]">
-                        {isLoading ? "..." : "+1"}
+                        {isLoading ? "..." : canQuickLog ? "+1" : "--"}
                       </div>
                     </button>
                   );
@@ -101,7 +105,7 @@ export const QuickLogPicker = ({
           )}
 
           <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-            Series without a configured duration are logged at 30 minutes by default.
+            Series without a configured duration must be configured from Title Board first.
           </p>
         </div>
 
