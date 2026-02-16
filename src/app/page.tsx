@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { Radio, TvMinimalPlay } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Lock, Radio, TvMinimalPlay } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { BalanceCommandDeck } from "@/components/dashboard/balance-command-deck";
 import { GoalNudgeBanner } from "@/components/dashboard/goal-nudge-banner";
@@ -25,7 +23,46 @@ import type {
   TitleItem,
 } from "@/lib/types";
 
-const toFallbackSummary = (learningLanguageCode: string, learningLanguageLabel: string): DashboardSummary => ({
+const SNAPSHOT_POLL_MS = 4_000;
+
+type ConvexMutationPath =
+  | "profile:ensureLocalSetup"
+  | "profile:setLearningLanguage"
+  | "titles:create"
+  | "titles:remove"
+  | "watchLogs:add"
+  | "watchLogs:remove";
+
+type ConvexQueryPath =
+  | "profile:get"
+  | "languages:list"
+  | "titles:list"
+  | "dashboard:summary"
+  | "watchLogs:listRecent";
+
+type ConvexResponse<T> =
+  | {
+      status: "success";
+      value: T;
+    }
+  | {
+      status: "error";
+      errorMessage?: string;
+    };
+
+type ProfileItem = {
+  key: string;
+  displayName: string;
+  learningLanguageCode: string;
+  learningLanguageLabel: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+const toFallbackSummary = (
+  learningLanguageCode: string,
+  learningLanguageLabel: string,
+): DashboardSummary => ({
   learningLanguageCode,
   learningLanguageLabel,
   learningMinutes: 0,
@@ -39,6 +76,62 @@ const toFallbackSummary = (learningLanguageCode: string, learningLanguageLabel: 
   recentLogs: [],
 });
 
+const isLoopbackHost = (host: string) =>
+  host === "127.0.0.1" || host === "localhost";
+
+const resolveConvexHttpBaseUrl = () => {
+  const configured = process.env.NEXT_PUBLIC_CONVEX_URL?.trim();
+  const serverFallback = "http://127.0.0.1:3210";
+
+  if (typeof window === "undefined") {
+    if (!configured) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("NEXT_PUBLIC_CONVEX_URL is required in production.");
+      }
+      return serverFallback;
+    }
+
+    const configuredUrl = new URL(configured);
+    if (
+      process.env.NODE_ENV === "production" &&
+      !isLoopbackHost(configuredUrl.hostname) &&
+      configuredUrl.protocol !== "https:"
+    ) {
+      throw new Error("NEXT_PUBLIC_CONVEX_URL must use HTTPS in production.");
+    }
+
+    return configuredUrl.toString().replace(/\/$/, "");
+  }
+
+  const browserHost = window.location.hostname;
+  const fallback = `http://${browserHost}:3210`;
+
+  if (!configured) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("NEXT_PUBLIC_CONVEX_URL is required in production.");
+    }
+    return fallback;
+  }
+
+  const configuredUrl = new URL(configured);
+  const isLoopbackConfigured = isLoopbackHost(configuredUrl.hostname);
+  const isLoopbackBrowserHost = isLoopbackHost(browserHost);
+
+  if (isLoopbackConfigured && !isLoopbackBrowserHost) {
+    configuredUrl.hostname = browserHost;
+  }
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    !isLoopbackHost(configuredUrl.hostname) &&
+    configuredUrl.protocol !== "https:"
+  ) {
+    throw new Error("NEXT_PUBLIC_CONVEX_URL must use HTTPS in production.");
+  }
+
+  return configuredUrl.toString().replace(/\/$/, "");
+};
+
 export default function HomePage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isQuickLogPickerOpen, setIsQuickLogPickerOpen] = useState(false);
@@ -47,44 +140,186 @@ export default function HomePage() {
   const [inlineLoggingTitleId, setInlineLoggingTitleId] = useState<Id<"titles"> | undefined>();
   const [quickLoggingTitleId, setQuickLoggingTitleId] = useState<Id<"titles"> | undefined>();
   const [isUpdatingLearningLanguage, setIsUpdatingLearningLanguage] = useState(false);
+  const [isSnapshotSyncing, setIsSnapshotSyncing] = useState(false);
 
-  const profile = useQuery(api.profile.get);
-  const languagesQuery = useQuery(api.languages.list);
-  const titlesQuery = useQuery(api.titles.list, {});
-  const dashboardQuery = useQuery(api.dashboard.summary);
-  const recentLogsQuery = useQuery(api.watchLogs.listRecent, { limit: 40 });
+  const [profile, setProfile] = useState<ProfileItem | undefined>();
+  const [languages, setLanguages] = useState<LanguageOption[]>(DEFAULT_LANGUAGES);
+  const [titles, setTitles] = useState<TitleItem[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | undefined>();
+  const [recentLogs, setRecentLogs] = useState<RecentLogItem[]>([]);
 
-  const ensureLocalSetup = useMutation(api.profile.ensureLocalSetup);
-  const setLearningLanguage = useMutation(api.profile.setLearningLanguage);
-  const createTitle = useMutation(api.titles.create);
-  const removeTitle = useMutation(api.titles.remove);
-  const addWatchLog = useMutation(api.watchLogs.add);
-  const removeWatchLog = useMutation(api.watchLogs.remove);
+  const convexHttpBaseUrl = useMemo(() => {
+    try {
+      return resolveConvexHttpBaseUrl();
+    } catch (error) {
+      toast.error((error as Error).message);
+      return "";
+    }
+  }, []);
+
+  const runConvexHttpRequest = useCallback(
+    async <TArgs extends Record<string, unknown>, TResult>(
+      route: "query" | "mutation",
+      path: ConvexQueryPath | ConvexMutationPath,
+      args: TArgs,
+    ): Promise<TResult> => {
+      if (!convexHttpBaseUrl) {
+        throw new Error("Convex URL is not configured.");
+      }
+
+      const response = await fetch(`${convexHttpBaseUrl}/api/${route}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          path,
+          args,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Convex ${route} failed (${response.status}).`);
+      }
+
+      const payload = (await response.json()) as ConvexResponse<TResult>;
+      if (payload.status !== "success") {
+        throw new Error(payload.errorMessage || `Convex ${route} failed.`);
+      }
+
+      return payload.value;
+    },
+    [convexHttpBaseUrl],
+  );
+
+  const runConvexHttpQuery = useCallback(
+    async <TArgs extends Record<string, unknown>, TResult>(
+      path: ConvexQueryPath,
+      args: TArgs,
+    ) =>
+      await runConvexHttpRequest<TArgs, TResult>("query", path, args),
+    [runConvexHttpRequest],
+  );
+
+  const runConvexHttpMutation = useCallback(
+    async <TArgs extends Record<string, unknown>, TResult>(
+      path: ConvexMutationPath,
+      args: TArgs,
+    ) =>
+      await runConvexHttpRequest<TArgs, TResult>("mutation", path, args),
+    [runConvexHttpRequest],
+  );
+
+  const refreshSnapshot = useCallback(
+    async (silent = false) => {
+      if (!convexHttpBaseUrl) {
+        if (!silent) {
+          toast.error("Convex URL is not configured.");
+        }
+        return false;
+      }
+
+      try {
+        setIsSnapshotSyncing(true);
+        const [
+          nextProfile,
+          nextLanguages,
+          nextTitles,
+          nextSummary,
+          nextRecentLogs,
+        ] = await Promise.all([
+          runConvexHttpQuery<Record<string, never>, ProfileItem>("profile:get", {}),
+          runConvexHttpQuery<Record<string, never>, LanguageOption[]>(
+            "languages:list",
+            {},
+          ),
+          runConvexHttpQuery<
+            { languageCode?: string; contentType?: "series" | "movie"; archived?: boolean },
+            TitleItem[]
+          >("titles:list", {}),
+          runConvexHttpQuery<Record<string, never>, DashboardSummary>(
+            "dashboard:summary",
+            {},
+          ),
+          runConvexHttpQuery<{ limit: number }, RecentLogItem[]>(
+            "watchLogs:listRecent",
+            { limit: 40 },
+          ),
+        ]);
+
+        setProfile(nextProfile);
+        setLanguages(nextLanguages.length > 0 ? nextLanguages : DEFAULT_LANGUAGES);
+        setTitles(nextTitles);
+        setSummary(nextSummary);
+        setRecentLogs(nextRecentLogs);
+        return true;
+      } catch (error) {
+        if (!silent) {
+          toast.error(`Could not sync data: ${(error as Error).message}`);
+        }
+        return false;
+      } finally {
+        setIsSnapshotSyncing(false);
+      }
+    },
+    [convexHttpBaseUrl, runConvexHttpQuery],
+  );
+
+  const mutateAndRefresh = useCallback(
+    async <TArgs extends Record<string, unknown>, TResult>(
+      path: ConvexMutationPath,
+      args: TArgs,
+    ): Promise<TResult> => {
+      const result = await runConvexHttpMutation<TArgs, TResult>(path, args);
+      await refreshSnapshot(true);
+      return result;
+    },
+    [refreshSnapshot, runConvexHttpMutation],
+  );
 
   useEffect(() => {
-    void ensureLocalSetup().catch((error) => {
-      toast.error(`Could not initialize local profile: ${error.message}`);
-    });
-  }, [ensureLocalSetup]);
+    let isCancelled = false;
 
-  const languages = useMemo(
-    () => (languagesQuery ?? DEFAULT_LANGUAGES) as LanguageOption[],
-    [languagesQuery],
+    const bootstrap = async () => {
+      if (!convexHttpBaseUrl) {
+        return;
+      }
+
+      try {
+        await runConvexHttpMutation("profile:ensureLocalSetup", {});
+      } catch (error) {
+        if (!isCancelled) {
+          toast.error(`Could not initialize local profile: ${(error as Error).message}`);
+        }
+      } finally {
+        if (!isCancelled) {
+          await refreshSnapshot(true);
+        }
+      }
+    };
+
+    void bootstrap();
+
+    const intervalId = window.setInterval(() => {
+      void refreshSnapshot(true);
+    }, SNAPSHOT_POLL_MS);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [convexHttpBaseUrl, refreshSnapshot, runConvexHttpMutation]);
+
+  const fallbackSummary = useMemo(
+    () =>
+      toFallbackSummary(
+        profile?.learningLanguageCode ?? "da",
+        profile?.learningLanguageLabel ?? "Danish",
+      ),
+    [profile?.learningLanguageCode, profile?.learningLanguageLabel],
   );
-  const titles = useMemo(() => (titlesQuery ?? []) as TitleItem[], [titlesQuery]);
-  const recentLogs = useMemo(
-    () => (recentLogsQuery ?? []) as RecentLogItem[],
-    [recentLogsQuery],
-  );
 
-  const fallbackSummary = useMemo(() => {
-    return toFallbackSummary(
-      profile?.learningLanguageCode ?? "da",
-      profile?.learningLanguageLabel ?? "Danish",
-    );
-  }, [profile?.learningLanguageCode, profile?.learningLanguageLabel]);
-
-  const summary = (dashboardQuery ?? fallbackSummary) as DashboardSummary;
+  const effectiveSummary = summary ?? fallbackSummary;
 
   const quickLogSeries = useMemo(
     () =>
@@ -121,8 +356,30 @@ export default function HomePage() {
             <h1 className="font-display text-4xl tracking-[0.08em] text-[var(--color-text-primary)] sm:text-5xl">
               Runtime Budget Tracker
             </h1>
+            <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-[var(--color-panel-border)] bg-[var(--color-surface-soft)] px-3 py-1 text-xs uppercase tracking-[0.16em]">
+              <span
+                className={`size-2 rounded-full ${
+                  isSnapshotSyncing
+                    ? "bg-[var(--color-non-learning)]"
+                    : "bg-[var(--color-learning)]"
+                }`}
+                aria-hidden
+              />
+              {isSnapshotSyncing ? "HTTP Syncing" : "HTTP Mode"}
+            </div>
           </div>
+
           <div className="hidden items-center gap-2 md:flex">
+            <form action="/api/auth/lock" method="post">
+              <Button
+                type="submit"
+                variant="outline"
+                className="min-h-11 border-[var(--color-panel-border)] bg-[var(--color-surface-soft)]"
+              >
+                <Lock className="size-4" />
+                Lock
+              </Button>
+            </form>
             <Button
               type="button"
               variant="outline"
@@ -146,18 +403,18 @@ export default function HomePage() {
 
         <section className="grid gap-4 lg:grid-cols-12">
           <div className="lg:col-span-8">
-            <BalanceCommandDeck summary={summary} />
+            <BalanceCommandDeck summary={effectiveSummary} />
           </div>
 
           <div className="space-y-4 lg:col-span-4">
             <LearningLanguageSwitcher
-              learningLanguageCode={summary.learningLanguageCode}
+              learningLanguageCode={effectiveSummary.learningLanguageCode}
               languages={languages}
               disabled={isUpdatingLearningLanguage}
               onChange={async (language) => {
                 try {
                   setIsUpdatingLearningLanguage(true);
-                  await setLearningLanguage({
+                  await mutateAndRefresh("profile:setLearningLanguage", {
                     code: language.code,
                     label: language.label,
                   });
@@ -172,15 +429,15 @@ export default function HomePage() {
               }}
             />
             <GoalNudgeBanner
-              debtMinutes={summary.debtMinutes}
-              learningLanguageLabel={summary.learningLanguageLabel}
+              debtMinutes={effectiveSummary.debtMinutes}
+              learningLanguageLabel={effectiveSummary.learningLanguageLabel}
             />
           </div>
 
           <div className="lg:col-span-12">
             <LanguageTotalsGrid
-              totals={summary.totalsByLanguage}
-              learningLanguageCode={summary.learningLanguageCode}
+              totals={effectiveSummary.totalsByLanguage}
+              learningLanguageCode={effectiveSummary.learningLanguageCode}
             />
           </div>
 
@@ -192,7 +449,7 @@ export default function HomePage() {
               onQuickLog={async (title, unitMinutes) => {
                 try {
                   setInlineLoggingTitleId(title._id);
-                  await addWatchLog({
+                  await mutateAndRefresh("watchLogs:add", {
                     titleId: title._id,
                     units: 1,
                     unitMinutes,
@@ -206,7 +463,7 @@ export default function HomePage() {
               }}
               onCreateTitle={async ({ name, contentType, languageCode, languageLabel }) => {
                 try {
-                  await createTitle({
+                  await mutateAndRefresh("titles:create", {
                     name,
                     contentType,
                     languageCode,
@@ -222,7 +479,7 @@ export default function HomePage() {
               onDeleteTitle={async (title) => {
                 try {
                   setDeletingTitleId(title._id);
-                  await removeTitle({ titleId: title._id });
+                  await mutateAndRefresh("titles:remove", { titleId: title._id });
                   toast.success(`Removed ${title.name}.`);
                 } catch (error) {
                   toast.error(`Could not remove title: ${(error as Error).message}`);
@@ -234,14 +491,14 @@ export default function HomePage() {
           </div>
 
           <div className="space-y-4 lg:col-span-5">
-            <LanguageRuntimeChart totals={summary.totalsByLanguage} />
+            <LanguageRuntimeChart totals={effectiveSummary.totalsByLanguage} />
             <RecentActivityTimeline
               logs={recentLogs}
               deletingLogId={deletingLogId}
               onDelete={async (logId) => {
                 try {
                   setDeletingLogId(logId);
-                  await removeWatchLog({ logId });
+                  await mutateAndRefresh("watchLogs:remove", { logId });
                   toast.success("Log entry removed.");
                 } catch (error) {
                   toast.error(`Could not remove log: ${(error as Error).message}`);
@@ -270,7 +527,7 @@ export default function HomePage() {
             }
 
             setQuickLoggingTitleId(title._id);
-            await addWatchLog({
+            await mutateAndRefresh("watchLogs:add", {
               titleId: title._id,
               units: 1,
               unitMinutes: title.defaultUnitMinutes,
@@ -290,7 +547,7 @@ export default function HomePage() {
         onOpenChange={setIsAddDialogOpen}
         languages={languages}
         onSubmit={async (values) => {
-          await createTitle(values);
+          await mutateAndRefresh("titles:create", values);
           toast.success(`Added ${values.name}.`);
         }}
       />

@@ -7,11 +7,14 @@
     "dev:convex": "convex dev --local",
     "dev": "concurrently -k \"bun run dev:web\" \"bun run dev:convex\"",
     "build": "next build",
+    "build:vercel": "convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd \"next build\"",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "deploy:convex": "convex deploy",
+    "deploy:vercel": "bunx vercel --prod"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
