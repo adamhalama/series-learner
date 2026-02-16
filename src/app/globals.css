@@ -1,0 +1,175 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+  --font-display: var(--font-bebas);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.95rem;
+
+  --background: #07121a;
+  --foreground: #e9f4ff;
+  --card: #0e1d2a;
+  --card-foreground: #e9f4ff;
+  --popover: #102232;
+  --popover-foreground: #e9f4ff;
+  --primary: #33d1ff;
+  --primary-foreground: #03131c;
+  --secondary: #173040;
+  --secondary-foreground: #dceeff;
+  --muted: #183042;
+  --muted-foreground: #8aa7bd;
+  --accent: #1f3c4f;
+  --accent-foreground: #e9f4ff;
+  --destructive: #ff6f5c;
+  --border: #214359;
+  --input: #173144;
+  --ring: #5fe0ff;
+
+  --color-background: #07121a;
+  --color-surface: #0c1d2b;
+  --color-surface-soft: #122637;
+  --color-panel-border: #24455c;
+  --color-text-primary: #e9f4ff;
+  --color-text-muted: #8ba8bc;
+  --color-signal: #33d1ff;
+  --color-learning: #5de78a;
+  --color-non-learning: #ffc45f;
+  --color-danger: #ff6f5c;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    min-height: 100dvh;
+    background:
+      radial-gradient(120% 120% at 100% 0%, rgb(51 209 255 / 10%) 0%, transparent 45%),
+      radial-gradient(100% 100% at 0% 100%, rgb(255 196 95 / 8%) 0%, transparent 40%),
+      var(--color-background);
+    color: var(--color-text-primary);
+    font-family: var(--font-plex-sans), sans-serif;
+  }
+}
+
+@layer components {
+  .panel-card {
+    border: 1px solid var(--color-panel-border);
+    background: linear-gradient(180deg, rgb(20 42 58 / 80%), rgb(12 29 43 / 92%));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 5%),
+      0 16px 40px rgb(0 0 0 / 28%);
+    border-radius: 1.2rem;
+  }
+
+  .meter-block {
+    border: 1px solid var(--color-panel-border);
+    background: rgb(17 37 54 / 80%);
+    border-radius: 0.9rem;
+    padding: 0.7rem;
+  }
+
+  .meter-label {
+    font-size: 0.66rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .meter-value {
+    margin-top: 0.4rem;
+    font-family: var(--font-plex-mono), monospace;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  .atmosphere {
+    pointer-events: none;
+    position: fixed;
+    inset: -25%;
+    z-index: 0;
+    background:
+      conic-gradient(from 70deg at 30% 20%, rgb(51 209 255 / 14%), transparent 50%),
+      conic-gradient(from 260deg at 80% 80%, rgb(255 196 95 / 12%), transparent 42%);
+    filter: blur(26px);
+  }
+
+  .scanline {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 0%, rgb(95 224 255 / 12%) 50%, transparent 100%);
+    mix-blend-mode: screen;
+    animation: scanline-sweep 5.5s linear infinite;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scanline-sweep {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  main section > * {
+    animation: panel-in 420ms ease-out both;
+  }
+
+  main section > *:nth-child(2) {
+    animation-delay: 80ms;
+  }
+
+  main section > *:nth-child(3) {
+    animation-delay: 130ms;
+  }
+
+  main section > *:nth-child(4) {
+    animation-delay: 170ms;
+  }
+}
