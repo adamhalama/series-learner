@@ -401,113 +401,127 @@ export default function HomePage() {
           </div>
         </header>
 
-        <section className="grid gap-4 lg:grid-cols-12">
-          <div className="lg:col-span-8">
-            <BalanceCommandDeck summary={effectiveSummary} />
+        <section className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-12">
+            <div className="lg:col-span-12">
+              <BalanceCommandDeck summary={effectiveSummary} />
+            </div>
           </div>
 
-          <div className="space-y-4 lg:col-span-4">
-            <LearningLanguageSwitcher
-              learningLanguageCode={effectiveSummary.learningLanguageCode}
-              languages={languages}
-              disabled={isUpdatingLearningLanguage}
-              onChange={async (language) => {
-                try {
-                  setIsUpdatingLearningLanguage(true);
-                  await mutateAndRefresh("profile:setLearningLanguage", {
-                    code: language.code,
-                    label: language.label,
-                  });
-                  toast.success(`Learning language set to ${language.label}.`);
-                } catch (error) {
-                  toast.error(
-                    `Could not update learning language: ${(error as Error).message}`,
-                  );
-                } finally {
-                  setIsUpdatingLearningLanguage(false);
-                }
-              }}
-            />
-            <GoalNudgeBanner
-              debtMinutes={effectiveSummary.debtMinutes}
-              learningLanguageLabel={effectiveSummary.learningLanguageLabel}
-            />
+          <div className="grid gap-4 lg:grid-cols-12">
+            <div className="lg:col-span-7">
+              <TitleBoard
+                titles={titles}
+                languages={languages}
+                loggingTitleId={inlineLoggingTitleId}
+                onQuickLog={async (title, unitMinutes) => {
+                  try {
+                    setInlineLoggingTitleId(title._id);
+                    await mutateAndRefresh("watchLogs:add", {
+                      titleId: title._id,
+                      units: 1,
+                      unitMinutes,
+                    });
+                    toast.success(`Logged 1 episode for ${title.name}.`);
+                  } catch (error) {
+                    toast.error(`Could not log session: ${(error as Error).message}`);
+                  } finally {
+                    setInlineLoggingTitleId(undefined);
+                  }
+                }}
+                onCreateTitle={async ({
+                  name,
+                  contentType,
+                  languageCode,
+                  languageLabel,
+                }) => {
+                  try {
+                    await mutateAndRefresh("titles:create", {
+                      name,
+                      contentType,
+                      languageCode,
+                      languageLabel,
+                    });
+                    toast.success(`Added ${name}.`);
+                  } catch (error) {
+                    toast.error(`Could not add title: ${(error as Error).message}`);
+                    throw error;
+                  }
+                }}
+                deletingTitleId={deletingTitleId}
+                onDeleteTitle={async (title) => {
+                  try {
+                    setDeletingTitleId(title._id);
+                    await mutateAndRefresh("titles:remove", { titleId: title._id });
+                    toast.success(`Removed ${title.name}.`);
+                  } catch (error) {
+                    toast.error(`Could not remove title: ${(error as Error).message}`);
+                  } finally {
+                    setDeletingTitleId(undefined);
+                  }
+                }}
+              />
+            </div>
+
+            <div className="space-y-4 lg:col-span-5">
+              <LanguageRuntimeChart totals={effectiveSummary.totalsByLanguage} />
+              <RecentActivityTimeline
+                logs={recentLogs}
+                deletingLogId={deletingLogId}
+                onDelete={async (logId) => {
+                  try {
+                    setDeletingLogId(logId);
+                    await mutateAndRefresh("watchLogs:remove", { logId });
+                    toast.success("Log entry removed.");
+                  } catch (error) {
+                    toast.error(`Could not remove log: ${(error as Error).message}`);
+                  } finally {
+                    setDeletingLogId(undefined);
+                  }
+                }}
+              />
+            </div>
           </div>
 
-          <div className="lg:col-span-12">
-            <LanguageTotalsGrid
-              totals={effectiveSummary.totalsByLanguage}
-              learningLanguageCode={effectiveSummary.learningLanguageCode}
-            />
+          <div className="grid gap-4 lg:grid-cols-12">
+            <div className="lg:col-span-7">
+              <LanguageTotalsGrid
+                totals={effectiveSummary.totalsByLanguage}
+                learningLanguageCode={effectiveSummary.learningLanguageCode}
+              />
+            </div>
           </div>
 
-          <div className="lg:col-span-7">
-            <TitleBoard
-              titles={titles}
-              languages={languages}
-              loggingTitleId={inlineLoggingTitleId}
-              onQuickLog={async (title, unitMinutes) => {
-                try {
-                  setInlineLoggingTitleId(title._id);
-                  await mutateAndRefresh("watchLogs:add", {
-                    titleId: title._id,
-                    units: 1,
-                    unitMinutes,
-                  });
-                  toast.success(`Logged 1 episode for ${title.name}.`);
-                } catch (error) {
-                  toast.error(`Could not log session: ${(error as Error).message}`);
-                } finally {
-                  setInlineLoggingTitleId(undefined);
-                }
-              }}
-              onCreateTitle={async ({ name, contentType, languageCode, languageLabel }) => {
-                try {
-                  await mutateAndRefresh("titles:create", {
-                    name,
-                    contentType,
-                    languageCode,
-                    languageLabel,
-                  });
-                  toast.success(`Added ${name}.`);
-                } catch (error) {
-                  toast.error(`Could not add title: ${(error as Error).message}`);
-                  throw error;
-                }
-              }}
-              deletingTitleId={deletingTitleId}
-              onDeleteTitle={async (title) => {
-                try {
-                  setDeletingTitleId(title._id);
-                  await mutateAndRefresh("titles:remove", { titleId: title._id });
-                  toast.success(`Removed ${title.name}.`);
-                } catch (error) {
-                  toast.error(`Could not remove title: ${(error as Error).message}`);
-                } finally {
-                  setDeletingTitleId(undefined);
-                }
-              }}
-            />
+          <div className="grid gap-4 lg:grid-cols-12">
+            <div className="space-y-4 lg:col-span-7">
+              <LearningLanguageSwitcher
+                learningLanguageCode={effectiveSummary.learningLanguageCode}
+                languages={languages}
+                disabled={isUpdatingLearningLanguage}
+                onChange={async (language) => {
+                  try {
+                    setIsUpdatingLearningLanguage(true);
+                    await mutateAndRefresh("profile:setLearningLanguage", {
+                      code: language.code,
+                      label: language.label,
+                    });
+                    toast.success(`Learning language set to ${language.label}.`);
+                  } catch (error) {
+                    toast.error(
+                      `Could not update learning language: ${(error as Error).message}`,
+                    );
+                  } finally {
+                    setIsUpdatingLearningLanguage(false);
+                  }
+                }}
+              />
+              <GoalNudgeBanner
+                debtMinutes={effectiveSummary.debtMinutes}
+                learningLanguageLabel={effectiveSummary.learningLanguageLabel}
+              />
+            </div>
           </div>
-
-          <div className="space-y-4 lg:col-span-5">
-            <LanguageRuntimeChart totals={effectiveSummary.totalsByLanguage} />
-            <RecentActivityTimeline
-              logs={recentLogs}
-              deletingLogId={deletingLogId}
-              onDelete={async (logId) => {
-                try {
-                  setDeletingLogId(logId);
-                  await mutateAndRefresh("watchLogs:remove", { logId });
-                  toast.success("Log entry removed.");
-                } catch (error) {
-                  toast.error(`Could not remove log: ${(error as Error).message}`);
-                } finally {
-                  setDeletingLogId(undefined);
-                }
-              }}
-            />
-          </div>
+          
         </section>
       </main>
 

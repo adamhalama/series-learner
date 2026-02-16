@@ -110,3 +110,5 @@ So `NEXT_PUBLIC_CONVEX_URL` is injected at build time automatically and points y
 
 ## TODOs
 - [ ] add books sections - to each book have a checkmark something like "adding to allowance" meaning that it will also count as "learning"
+- [ ] Switch back to WebSockets mode, figure out what was wrong
+- [ ] 
