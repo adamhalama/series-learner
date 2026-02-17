@@ -106,6 +106,9 @@ So `NEXT_PUBLIC_CONVEX_URL` is injected at build time automatically and points y
 - Interim mitigation without app login: enable Vercel Deployment Protection (Vercel Authentication or Password Protection) so only you can access the deployment.
 - Recommended next hardening: add app-level authentication before sharing publicly.
 
+## License
+MIT. See [LICENSE](./LICENSE).
+
 
 
 ## TODOs
