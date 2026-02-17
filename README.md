@@ -1,4 +1,5 @@
 # Series Learner Tracker
+*For very serious language learners 😝*
 
 Mobile-first web app for tracking TV series/movie watch time by language with a learning-language budget rule.
 
