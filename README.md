@@ -115,4 +115,4 @@ MIT. See [LICENSE](./LICENSE).
 ## TODOs
 - [ ] add books sections - to each book have a checkmark something like "adding to allowance" meaning that it will also count as "learning"
 - [ ] Switch back to WebSockets mode, figure out what was wrong
-- [ ] 
+- [ ] Add proper auth for multi-user support.
